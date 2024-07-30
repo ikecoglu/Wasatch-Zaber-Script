@@ -7,10 +7,9 @@ Zaber Platform: X-LSM025A
 
 
 ## MAC:
-	Dependencies
+Dependencies
 
-	```
- 	pip install zaber-motion
+	pip install zaber-motion
 	pip install wasatch
  
 	conda config --add channels conda-forge
@@ -28,9 +27,8 @@ Zaber Platform: X-LSM025A
  	conda install pexpect
 	conda install seabreeze
  	conda install pyudev
-	```
-	
-	Dependencies listed were collected from the script and from Wasatch Github: https://github.com/WasatchPhotonics/Wasatch.PY/ 
+
+Dependencies listed were collected from the script and from Wasatch Github: https://github.com/WasatchPhotonics/Wasatch.PY/ 
  
 ## WINDOWS:
   TBD
