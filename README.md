@@ -14,7 +14,7 @@ I recommend using conda with the added channels because we noticed that the vers
 	pip install zaber-motion
 	pip install wasatch
 
- 	pip install matplotlib.pyplot
+ 	pip install matplotlib
    	pip install numpy
   
 	conda config --add channels conda-forge
