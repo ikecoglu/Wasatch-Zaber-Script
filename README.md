@@ -7,7 +7,9 @@ Zaber Platform: X-LSM025A
 
 
 ## MAC:
-Dependencies
+**Dependencies**
+
+I recommend using conda with the added channels because we noticed that the version on pip and base conda caused problems with USB detection
 
 	pip install zaber-motion
 	pip install wasatch
