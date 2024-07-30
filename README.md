@@ -11,13 +11,15 @@ Dependencies
 
 	pip install zaber-motion
 	pip install wasatch
- 
+
+ 	pip install matplotlib.pyplot
+   	pip install numpy
+  
 	conda config --add channels conda-forge
 	conda config --add channels bioconda
  
 	conda install seabreeze	
 	conda install mkl
- 	conda install numpy
 	conda install six
 	conda install psutil
 	conda install future
