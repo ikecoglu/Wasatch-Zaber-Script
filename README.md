@@ -9,28 +9,23 @@ Zaber Platform: X-LSM025A
 ## MAC:
 **Dependencies**
 
-I recommend using conda with the added channels because we noticed that the version on pip and base conda caused problems with USB detection
+Using [Homebrew]([url](https://brew.sh/)) run 'brew install libusb'
 
 	pip install zaber-motion
 	pip install wasatch
-
  	pip install matplotlib
    	pip install numpy
-  
-	conda config --add channels conda-forge
-	conda config --add channels bioconda
- 
-	conda install seabreeze	
-	conda install mkl
-	conda install six
-	conda install psutil
-	conda install future
-	conda install pygtail
- 	conda install pyusb
-	conda install requests
- 	conda install pexpect
-	conda install seabreeze
- 	conda install pyudev
+	pip install seabreeze	
+	pip install mkl
+	pip install six
+	pip install psutil
+	pip install future
+	pip install pygtail
+ 	pip install pyusb
+	pip install requests
+ 	pip install pexpect
+	pip install seabreeze
+ 	pip install pyudev
 
 Dependencies listed were collected from the script and from Wasatch Github: https://github.com/WasatchPhotonics/Wasatch.PY/ 
  
