@@ -1,23 +1,24 @@
 import csv
 import sys
 import time
+from datetime import datetime
 from zaber_motion import Units
 from zaber_motion.ascii import Connection
 from wasatch.WasatchBus import WasatchBus
 from wasatch.WasatchDevice import WasatchDevice
 import matplotlib.pyplot as plt
 import tkinter as tk
-from tkinter import filedialog
+from tkinter import filedialog, messagebox
 
-# step size 85 micron and step number 39 for 50% overlap on a 3.5x3.5mm substrate
+# This script does not run if the Enlighten software is open
 
 # VARIABLE PARAMETERS for Zaber movement
-step_number     = 20 # grid with dimensions a x a
-step_size       = 60  # micrometers
+step_number     = 10 # grid with dimensions a x a
+step_size       = 100  # micrometers
 velocity        = 300  # micrometers/second
 
 # VARIABLE PARAMETERS for Wasatch scans
-integration_time    = 3000 # millisec
+integration_time    = 5000 # millisec
 laser_power         = 450 # mW
 
 # File Saving
@@ -124,11 +125,11 @@ print("Found %s" % device_id)
 
 spectrometer = WasatchDevice(device_id)
 if not spectrometer.connect():
-    print("Connection failed")
+    print("Connection failed: 1")
     sys.exit(1)
 
 if spectrometer.settings.eeprom.model == None:
-    print("Connection failed: EEPROM")
+    print("Connection failed: 2")
     sys.exit(1)
 
 print("Connected to %s %s with %d pixels from (%.2f, %.2f)" % (
@@ -150,26 +151,20 @@ with Connection.open_serial_port("/dev/tty.usbserial-A10NFU4I") as connection:
         sys.exit(1)
     
     platform1 = device_list[0]
-    platofrm2 = device_list[1]
+    platform2 = device_list[1]
 
     axis = platform1.get_axis(1)
     if not axis.is_homed():
         axis.home()
 
-    axis = platofrm2.get_axis(1)
+    axis = platform2.get_axis(1)
     if not axis.is_homed():
         axis.home()
 
     # VARIABLE PARAMETERS for origin coordinates and velocity
-    move_to_position(platform1, 2029.73, 1000)
-    move_to_position(platofrm2, 12605.91, 1000)
-
-    # 1137.24
-    # 3051.52y, 12605.91x
-    # 2841.212y, 12972.574x
-
-    # adenosine 1715.93y 12350.64x
-
+    move_to_position(platform1, 4018.65, 5000)
+    move_to_position(platform2, 15289.72, 5000)
+    
     take_dark_scan()
 
     spectrometer.hardware.set_laser_enable(True)
@@ -178,7 +173,13 @@ with Connection.open_serial_port("/dev/tty.usbserial-A10NFU4I") as connection:
     # time.sleep(15)
     print("Laser initiated")
 
-    move_snake(platform1, platofrm2, step_number, step_size, velocity, base_file_path)
+    move_snake(platform1, platform2, step_number, step_size, velocity, base_file_path)
 
 spectrometer.hardware.set_laser_enable(False)
-print("Laser off, scans saved :)")
+
+root = tk.Tk()
+root.withdraw()
+messagebox.showinfo("Notification", f"Zaber-Wastach Script Finished!\n{datetime.now().strftime("%I:%M:%S %p")}")
+root.destroy()
+
+print(f"Laser off, scans saved :) -- {datetime.now().strftime("%I:%M:%S %p")}")
