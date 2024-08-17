@@ -1,6 +1,6 @@
-import csv
 import sys
 import time
+import pandas as pd
 from datetime import datetime
 from zaber_motion import Units
 from zaber_motion.ascii import Connection
@@ -9,37 +9,36 @@ from wasatch.WasatchDevice import WasatchDevice
 import matplotlib.pyplot as plt
 import tkinter as tk
 from tkinter import filedialog, messagebox
+from pynput import keyboard
 
 # This script does not run if the Enlighten software is open
 
 # VARIABLE PARAMETERS for Zaber movement
-step_number     = 10 # grid with dimensions a x a
-step_size       = 100  # micrometers
+step_number     = 2 # grid with dimensions a x a
+step_size       = 25  # micrometers
 velocity        = 300  # micrometers/second
 
 # VARIABLE PARAMETERS for Wasatch scans
 integration_time    = 5000 # millisec
 laser_power         = 450 # mW
 
-# File Saving
-save_seperately = True # if false, all readings will be saved into one file
+# Files
+wavenumbers = pd.read_csv('/Users/milo/Documents/CREST/Wasatch-Zayber-Script/wavenumbers.csv') # path to wavenumbers
+
+# Function to listen for keyboard input to stop the process
+def listen_for_stop(key):
+    global stop_flag
+    if key == keyboard.Key.backspace or key == keyboard.Key.delete:
+        print("Keyboard Interruption")
+        stop_flag = True
 
 # Function to save spectrum data to CSV
-def save_file(data, file_path, multifile=False):
-    with open(file_path, 'w', newline='') as file:
-        writer = csv.writer(file)
-
-        if (multifile):
-            # Writing the header for multifile with multiple intensity columns
-            writer.writerow(['Pixel'] + [i for i in range(len(data))])
-
-            for i in range(len(data[0])):
-                row = [i] + [d[i] for d in data]
-                writer.writerow(row)
-        else:
-            writer.writerow(['Pixel', 'Intensity'])
-            for i, value in enumerate(data):
-                writer.writerow([i, value])
+def save_file(data, file_path):
+    data_df = pd.DataFrame()
+    if (wavenumbers is not None):
+        data_df['Wavenumber'] = wavenumbers.iloc[:, 0]
+    data_df['Intensity'] = data
+    data_df.to_csv(file_path)
 
 dark_spectrum = None
 # Function to collect dark-subtracted spectrum and to plot it in real time
@@ -73,17 +72,11 @@ def move_platform(platform, step_number, step_size, vel, base_file_path, save_co
     for x in range(step_number):
         axis.move_relative(step_size, unit=Units.LENGTH_MICROMETRES, velocity=vel, velocity_unit=Units.VELOCITY_MICROMETRES_PER_SECOND)
         spectrum = collect_spectrum()
- 
-        if (save_seperately):
-            save_counter[0] += 1
-            # Save the spectrum data to a unique CSV file
-            file_path = f'{base_file_path}_step_{save_counter[0]}.csv'
-            save_file(spectrum, file_path)
-            print(f'Spectrum saved to {file_path}')
-        else:
-            # add spectrum
-            for i in range(len(spectrum)):
-                spectra[i].append(spectrum[i])
+        save_counter[0] += 1
+        # Save the spectrum data to a unique CSV file
+        file_path = f'{base_file_path}_step_{save_counter[0]}.csv'
+        save_file(spectrum, file_path)
+        print(f'Spectrum saved to {file_path}')
 
 # Function to create the raster movement
 def move_snake(platform1, platform2, step_number, step_size, vel, base_file_path):
@@ -98,10 +91,11 @@ def move_snake(platform1, platform2, step_number, step_size, vel, base_file_path
     axis = platform2.get_axis(1)
     for x in range(step_number):
         move_platform(platform1, step_number, step_size * (-1) ** x, vel, base_file_path, save_counter, spectra)
+        if stop_flag:
+                return
         axis.move_relative(step_size, unit=Units.LENGTH_MICROMETRES, velocity=vel, velocity_unit=Units.VELOCITY_MICROMETRES_PER_SECOND)
 
-    if (not save_seperately):
-        save_file(spectra, f'{base_file_path}.csv', multifile=True)
+    save_file(spectra, f'{base_file_path}.csv')
 
 # Tkinter setup to get the file path for saving CSV files
 root = tk.Tk()
@@ -161,9 +155,16 @@ with Connection.open_serial_port("/dev/tty.usbserial-A10NFU4I") as connection:
     if not axis.is_homed():
         axis.home()
 
+    print('Press delete/backspace to stop the script')
+    stop_flag = False
+    listener = keyboard.Listener(on_press=listen_for_stop)
+    listener.start()
+
     # VARIABLE PARAMETERS for origin coordinates and velocity
     move_to_position(platform1, 4018.65, 5000)
     move_to_position(platform2, 15289.72, 5000)
+
+    # 4413.55, 11745.13
     
     take_dark_scan()
 
@@ -176,10 +177,12 @@ with Connection.open_serial_port("/dev/tty.usbserial-A10NFU4I") as connection:
     move_snake(platform1, platform2, step_number, step_size, velocity, base_file_path)
 
 spectrometer.hardware.set_laser_enable(False)
+listener.join()
 
-root = tk.Tk()
-root.withdraw()
-messagebox.showinfo("Notification", f"Zaber-Wastach Script Finished!\n{datetime.now().strftime("%I:%M:%S %p")}")
-root.destroy()
+if (not stop_flag):
+    root = tk.Tk()
+    root.withdraw()
+    messagebox.showinfo("Notification", f"Zaber-Wastach Script Finished!\n{datetime.now().strftime("%I:%M:%S %p")}")
+    root.destroy()
 
 print(f"Laser off, scans saved :) -- {datetime.now().strftime("%I:%M:%S %p")}")
