@@ -11,19 +11,29 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from pynput import keyboard
 
-# This script does not run if the Enlighten software is open
+# OPERATION INFO
+    # Script does not run if the Enlighten software is open
+    # Script starts in the top right and snake scans to the bottom left
+    # Dark is collected and live subtracted from all readings
 
 # VARIABLE PARAMETERS for Zaber movement
 step_number     = 2 # grid with dimensions a x a
 step_size       = 25  # micrometers
 velocity        = 300  # micrometers/second
+origin          = (4018.65, 15289.72) # origin co-ordinates (x, y)
 
 # VARIABLE PARAMETERS for Wasatch scans
 integration_time    = 5000 # millisec
 laser_power         = 450 # mW
 
 # Files
-wavenumbers = pd.read_csv('/Users/milo/Documents/CREST/Wasatch-Zayber-Script/wavenumbers.csv') # path to wavenumbers
+try:
+    wavenumbers = pd.read_csv('/Users/milo/Documents/CREST/Wasatch-Zayber-Script/wavenumbers1.csv') # path to wavenumbers
+except FileNotFoundError as e:
+    print(f'{e}\nProvide valid file path to wavenumbers.csv file\n')
+    sys.exit(1)
+
+#region Function Definitions
 
 # Function to listen for keyboard input to stop the process
 def listen_for_stop(key):
@@ -97,17 +107,9 @@ def move_snake(platform1, platform2, step_number, step_size, vel, base_file_path
 
     save_file(spectra, f'{base_file_path}.csv')
 
-# Tkinter setup to get the file path for saving CSV files
-root = tk.Tk()
-root.withdraw()  # Hide the root window
-base_file_path = filedialog.asksaveasfilename(title="Save CSV File")
-print(base_file_path)
-root.destroy()
+#endregion
 
-if not base_file_path:
-    print("No file path provided")
-    import sys
-    sys.exit(1)
+#region Device Connection
 
 bus = WasatchBus()
 if not bus.device_ids:
@@ -119,11 +121,11 @@ print("Found %s" % device_id)
 
 spectrometer = WasatchDevice(device_id)
 if not spectrometer.connect():
-    print("Connection failed: 1")
+    print("Connection failed: spectrometer.connect() call failed. \n-Ensure that ENLGIHTEN software is closed")
     sys.exit(1)
 
 if spectrometer.settings.eeprom.model == None:
-    print("Connection failed: 2")
+    print("Connection failed: blank connection")
     sys.exit(1)
 
 print("Connected to %s %s with %d pixels from (%.2f, %.2f)" % (
@@ -155,29 +157,44 @@ with Connection.open_serial_port("/dev/tty.usbserial-A10NFU4I") as connection:
     if not axis.is_homed():
         axis.home()
 
-    print('Press delete/backspace to stop the script')
-    stop_flag = False
-    listener = keyboard.Listener(on_press=listen_for_stop)
-    listener.start()
+#endregion
 
-    # VARIABLE PARAMETERS for origin coordinates and velocity
-    move_to_position(platform1, 4018.65, 5000)
-    move_to_position(platform2, 15289.72, 5000)
+# Tkinter setup to get the file path for saving CSV files
+root = tk.Tk()
+root.withdraw()  # Hide the root window
+base_file_path = filedialog.asksaveasfilename(title="Save CSV File")
+print(base_file_path)
+root.destroy()
 
-    # 4413.55, 11745.13
+if not base_file_path:
+    print("No file path provided")
+    import sys
+    sys.exit(1)
+
+# abort script flag thread started
+print('Press delete/backspace to stop the script')
+stop_flag = False
+listener = keyboard.Listener(on_press=listen_for_stop)
+listener.start()
+
+# move to origin co-ordinates
+move_to_position(platform1, origin[0], 5000)
+move_to_position(platform2, origin[1], 5000)
     
-    take_dark_scan()
+take_dark_scan()
 
-    spectrometer.hardware.set_laser_enable(True)
-    spectrometer.hardware.set_laser_power_mW(laser_power)
+spectrometer.hardware.set_laser_enable(True)
+spectrometer.hardware.set_laser_power_mW(laser_power)
 
-    # time.sleep(15)
-    print("Laser initiated")
+# time.sleep(15)
+print("Laser initiated")
 
-    move_snake(platform1, platform2, step_number, step_size, velocity, base_file_path)
+# Begin scans
+move_snake(platform1, platform2, step_number, step_size, velocity, base_file_path)
 
 spectrometer.hardware.set_laser_enable(False)
 listener.join()
+plt.close()
 
 if (not stop_flag):
     root = tk.Tk()
@@ -186,3 +203,18 @@ if (not stop_flag):
     root.destroy()
 
 print(f"Laser off, scans saved :) -- {datetime.now().strftime("%I:%M:%S %p")}")
+
+'''
+Further Script Development
+-------------------------
+*Quality of Life*
+- Should average multiple darks and/or despike the dark in case of cosmic spike during dark collection
+- Solve the connection error that requires you to re-run the script multiple times
+- Can’t get laser to start (junk readings)
+    - time.sleep() doesn't seem to be enough and wasatch's sdk get_laser_temperature() seems broken
+    -  maybe take random readings before starting and wait till spectra reaches certain threshold
+- Fix matplot regenerating the window for each reading
+- Check if file with same name is already present
+- If disconnected during runtime, retry connection
+- Check spectrometer temp before running (should be ~ -15 Celsius)
+'''
