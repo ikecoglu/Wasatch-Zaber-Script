@@ -1,11 +1,14 @@
 import sys
+import os
 import time
 import pandas as pd
+import numpy as np
 from datetime import datetime
 from zaber_motion import Units
 from zaber_motion.ascii import Connection
 from wasatch.WasatchBus import WasatchBus
 from wasatch.WasatchDevice import WasatchDevice
+from scipy.ndimage import median_filter
 import matplotlib.pyplot as plt
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -13,8 +16,10 @@ from pynput import keyboard
 
 # OPERATION INFO
     # Script does not run if the Enlighten software is open
+    # May fail to connect multiple times in a row. You must persevere over the machine
     # Script starts in the top right and snake scans to the bottom left
     # Dark is collected and live subtracted from all readings
+    # Output file is one column wavenumbers and another for intensity
 
 # VARIABLE PARAMETERS for Zaber movement
 step_number     = 2 # grid with dimensions a x a
@@ -28,7 +33,7 @@ laser_power         = 450 # mW
 
 # Files
 try:
-    wavenumbers = pd.read_csv('/Users/milo/Documents/CREST/Wasatch-Zayber-Script/wavenumbers1.csv') # path to wavenumbers
+    wavenumbers = pd.read_csv('/Users/milo/Documents/CREST/Wasatch-Zayber-Script/wavenumbers.csv') # path to wavenumbers
 except FileNotFoundError as e:
     print(f'{e}\nProvide valid file path to wavenumbers.csv file\n')
     sys.exit(1)
@@ -39,7 +44,7 @@ except FileNotFoundError as e:
 def listen_for_stop(key):
     global stop_flag
     if key == keyboard.Key.backspace or key == keyboard.Key.delete:
-        print("Keyboard Interruption")
+        print("Keyboard Interruption\n")
         stop_flag = True
 
 # Function to save spectrum data to CSV
@@ -52,15 +57,24 @@ def save_file(data, file_path):
 
 dark_spectrum = None
 # Function to collect dark-subtracted spectrum and to plot it in real time
-def collect_spectrum(correct_dark=True):
+def collect_spectrum(figure, line, correct_dark=True):
     global dark_spectrum
     spectrum = spectrometer.hardware.get_line().data.spectrum
     if correct_dark and dark_spectrum is not None:
         spectrum = [s - d for s, d in zip(spectrum, dark_spectrum)]
-    plt.plot(spectrum)
-    plt.show(block=False)
+
+    line.set_ydata(spectrum)
+    figure.canvas.draw()
+    figure.canvas.flush_events()
     plt.pause(0.001)
-    plt.clf()
+
+    return spectrum
+
+# Function to despike spectrum (used for dark reading)
+def despike_spectrum(spectrum, threshold=5):
+    filtered = median_filter(spectrum, size=3)
+    spikes = np.abs(spectrum - filtered) > threshold
+    spectrum[spikes] = filtered[spikes]
     return spectrum
 
 # Function to collect dark spectrum for dark subtraction
@@ -69,6 +83,7 @@ def take_dark_scan():
     spectrometer.hardware.set_laser_enable(False)
     time.sleep(5)
     dark_spectrum = spectrometer.hardware.get_line().data.spectrum
+    dark_spectrum = despike_spectrum(dark_spectrum)
     print("Dark scan collected")
 
 # Function to move platform to origin coordinates before initiating scan
@@ -77,11 +92,11 @@ def move_to_position(platform, position, vel):
     axis.move_absolute(position, unit=Units.LENGTH_MICROMETRES, velocity=vel, velocity_unit=Units.VELOCITY_MICROMETRES_PER_SECOND)
 
 # Function to move device in one direction and save spectrum
-def move_platform(platform, step_number, step_size, vel, base_file_path, save_counter, spectra):
+def move_platform(platform, step_number, step_size, vel, base_file_path, save_counter, figure, line):
     axis = platform.get_axis(1)
     for x in range(step_number):
         axis.move_relative(step_size, unit=Units.LENGTH_MICROMETRES, velocity=vel, velocity_unit=Units.VELOCITY_MICROMETRES_PER_SECOND)
-        spectrum = collect_spectrum()
+        spectrum = collect_spectrum(figure, line)
         save_counter[0] += 1
         # Save the spectrum data to a unique CSV file
         file_path = f'{base_file_path}_step_{save_counter[0]}.csv'
@@ -91,21 +106,20 @@ def move_platform(platform, step_number, step_size, vel, base_file_path, save_co
 # Function to create the raster movement
 def move_snake(platform1, platform2, step_number, step_size, vel, base_file_path):
     save_counter = [0]  # Using a list to keep the counter mutable across function calls
-    spectra = [[0]]
 
     plt.ion()
-    plt.title("Spectrum Test")
-    plt.xlabel("Pixels")
+    figure, ax = plt.subplots(figsize=(10, 8))
+    line, = ax.plot(wavenumbers.index, range(len(wavenumbers.index)))
+    plt.title(f"Spectrum")
+    plt.xlabel("Wavenumbers")
     plt.ylabel("Intensity")
 
     axis = platform2.get_axis(1)
     for x in range(step_number):
-        move_platform(platform1, step_number, step_size * (-1) ** x, vel, base_file_path, save_counter, spectra)
+        move_platform(platform1, step_number, step_size * (-1) ** x, vel, base_file_path, save_counter, figure, line)
         if stop_flag:
                 return
         axis.move_relative(step_size, unit=Units.LENGTH_MICROMETRES, velocity=vel, velocity_unit=Units.VELOCITY_MICROMETRES_PER_SECOND)
-
-    save_file(spectra, f'{base_file_path}.csv')
 
 #endregion
 
@@ -121,7 +135,7 @@ print("Found %s" % device_id)
 
 spectrometer = WasatchDevice(device_id)
 if not spectrometer.connect():
-    print("Connection failed: spectrometer.connect() call failed. \n-Ensure that ENLGIHTEN software is closed")
+    print("Connection failed: spectrometer.connect() call failed. \n- Ensure that ENLGIHTEN software is closed")
     sys.exit(1)
 
 if spectrometer.settings.eeprom.model == None:
@@ -149,13 +163,13 @@ with Connection.open_serial_port("/dev/tty.usbserial-A10NFU4I") as connection:
     platform1 = device_list[0]
     platform2 = device_list[1]
 
-    axis = platform1.get_axis(1)
-    if not axis.is_homed():
-        axis.home()
+axis = platform1.get_axis(1)
+if not axis.is_homed():
+    axis.home()
 
-    axis = platform2.get_axis(1)
-    if not axis.is_homed():
-        axis.home()
+axis = platform2.get_axis(1)
+if not axis.is_homed():
+    axis.home()
 
 #endregion
 
@@ -166,10 +180,24 @@ base_file_path = filedialog.asksaveasfilename(title="Save CSV File")
 print(base_file_path)
 root.destroy()
 
+# check if file path was provided
 if not base_file_path:
     print("No file path provided")
     import sys
     sys.exit(1)
+
+# check if file name already exists and prompt user
+if os.path.exists(base_file_path + '_step_1.csv'): # this is poorly hardcoded
+    print("File path already exists")
+    while(True):
+        user_input = input("This will override other files. Do you want to continue? (yes/no): ").strip().lower()
+        if user_input == "yes":
+            break
+        elif user_input == "no":
+            print("Process aborted")
+            sys.exit(1)
+        else:
+            print("Invalid input. Please enter 'yes' or 'no'")
 
 # abort script flag thread started
 print('Press delete/backspace to stop the script')
@@ -178,8 +206,8 @@ listener = keyboard.Listener(on_press=listen_for_stop)
 listener.start()
 
 # move to origin co-ordinates
-move_to_position(platform1, origin[0], 5000)
-move_to_position(platform2, origin[1], 5000)
+move_to_position(platform1, origin[0], 6000)
+move_to_position(platform2, origin[1], 6000)
     
 take_dark_scan()
 
@@ -199,7 +227,7 @@ plt.close()
 if (not stop_flag):
     root = tk.Tk()
     root.withdraw()
-    messagebox.showinfo("Notification", f"Zaber-Wastach Script Finished!\n{datetime.now().strftime("%I:%M:%S %p")}")
+    messagebox.showinfo("Notification", f"Zaber-Wasatch Script Finished!\n{datetime.now().strftime("%I:%M:%S %p")}")
     root.destroy()
 
 print(f"Laser off, scans saved :) -- {datetime.now().strftime("%I:%M:%S %p")}")
@@ -208,13 +236,11 @@ print(f"Laser off, scans saved :) -- {datetime.now().strftime("%I:%M:%S %p")}")
 Further Script Development
 -------------------------
 *Quality of Life*
-- Should average multiple darks and/or despike the dark in case of cosmic spike during dark collection
 - Solve the connection error that requires you to re-run the script multiple times
 - Can’t get laser to start (junk readings)
     - time.sleep() doesn't seem to be enough and wasatch's sdk get_laser_temperature() seems broken
-    -  maybe take random readings before starting and wait till spectra reaches certain threshold
-- Fix matplot regenerating the window for each reading
-- Check if file with same name is already present
+    - maybe take random readings before starting and wait till spectra reaches certain threshold. Could risk burning sample
 - If disconnected during runtime, retry connection
 - Check spectrometer temp before running (should be ~ -15 Celsius)
+- Check that laser key is turned
 '''
