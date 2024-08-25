@@ -86,8 +86,8 @@ def take_dark_scan(despike=False):
     time.sleep(5)
     dark_spectrum = spectrometer.hardware.get_line().data.spectrum
     if despike == True:
-        despike_dark = despike_spectrum(np.array(dark_spectrum))
-        dark_spectrum = despike_dark.tolist()
+        despiked_dark = despike_spectrum(np.array(dark_spectrum))
+        dark_spectrum = despiked_dark.tolist()
     print("Dark scan collected")
 
 # Function to move platform to origin coordinates before initiating scan
@@ -208,7 +208,7 @@ with Connection.open_serial_port("/dev/tty.usbserial-A10NFU4I") as connection:
     move_to_position(platform1, origin[0], 6000)
     move_to_position(platform2, origin[1], 6000)
         
-    take_dark_scan()
+    take_dark_scan(despike=despike_dark)
 
     spectrometer.hardware.set_laser_enable(True)
 
