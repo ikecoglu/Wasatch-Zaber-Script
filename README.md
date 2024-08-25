@@ -2,6 +2,7 @@
 Instructions to install a scanning python script for Wasatch/Zayber.
 
 Operation:
+- Wait for spectrometer to reach -15 celsius
 - Script does not run if the Enlighten software is open
 - May fail to connect multiple times in a row. You must persevere over the machine
 - Script starts in the top right and snake scans to the bottom left
@@ -20,10 +21,10 @@ Zaber Platform: X-LSM025A
 Using [Homebrew](https://brew.sh/), run `brew install libusb` to solve a backend error
 
 ## Dependencies
-Run the following command in terminal, using the dependencies.txt file from this repo
+Run the following command in terminal, using the requirements.txt file from this repo
 (make sure the path to the .txt file is correct)
 
-	pip install -r dependencies.txt
+	pip install -r requirements.txt
 
 or, install each dependency one by one
 
@@ -44,7 +45,6 @@ or, install each dependency one by one
  	pip install pyudev
   	pip install pandas
    	pip install datetime
-    pip install pynput
 	pip install scipy
 
 Dependencies listed were collected from the script and from Wasatch Github: https://github.com/WasatchPhotonics/Wasatch.PY/ 
