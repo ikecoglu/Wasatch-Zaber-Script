@@ -10,7 +10,6 @@ pygtail
 pyusb
 requests
 pexpect
-seabreeze
 pyudev
 pandas
 datetime
