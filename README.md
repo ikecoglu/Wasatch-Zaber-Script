@@ -41,7 +41,6 @@ or, install each dependency one by one
  	pip install pyusb
 	pip install requests
  	pip install pexpect
-	pip install seabreeze
  	pip install pyudev
   	pip install pandas
    	pip install datetime
